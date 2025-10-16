@@ -13,14 +13,44 @@
 {% liquid
   assign metafield_images = block.settings.image_list_metafield.value
   assign has_images = false
-  
-  if metafield_images.size > 0
+  assign total_images = 0
+
+  if metafield_images != blank and metafield_images.size > 0
     assign has_images = true
+    assign total_images = metafield_images.size
   else
-    if block.settings.image_1 != blank or block.settings.image_2 != blank or block.settings.image_3 != blank or block.settings.image_4 != blank or block.settings.image_5 != blank or block.settings.image_6 != blank or block.settings.image_7 != blank or block.settings.image_8 != blank
+    for i in (1..8)
+      assign image_key = 'image_' | append: i
+      assign image = block.settings[image_key]
+      if image != blank
+        assign total_images = total_images | plus: 1
+      endif
+    endfor
+
+    if total_images > 0
       assign has_images = true
     endif
   endif
+
+  if total_images < 1
+    assign total_images = 1
+  endif
+
+  assign desktop_columns = 5
+  if total_images < 5
+    assign desktop_columns = total_images
+  endif
+
+  assign tablet_columns = 3
+  if total_images < 3
+    assign tablet_columns = total_images
+  endif
+
+  assign mobile_columns = 2
+  if total_images < 2
+    assign mobile_columns = total_images
+  endif
+
 %}
 
 {% if has_images %}
@@ -48,21 +78,34 @@
     .ai-carousel-track-wrapper-{{ ai_gen_id }} {
       overflow: hidden;
       position: relative;
+      scroll-snap-type: none;
     }
 
     .ai-carousel-track-{{ ai_gen_id }} {
+      --carousel-gap: {{ block.settings.image_gap }}px;
+      --carousel-columns: {{ desktop_columns }};
+      --carousel-visible-columns: var(--carousel-columns);
       display: flex;
-      gap: {{ block.settings.image_gap }}px;
+      gap: var(--carousel-gap);
       transition: transform 0.4s ease;
     }
 
     .ai-carousel-item-{{ ai_gen_id }} {
-      flex: 0 0 calc((100% - ({{ block.settings.image_gap }}px * 4)) / 5);
+      flex: 0 0 calc((100% - (var(--carousel-gap) * (var(--carousel-visible-columns) - 1))) / var(--carousel-visible-columns));
       height: {{ block.settings.image_height }}px;
       cursor: pointer;
       border-radius: {{ block.settings.image_border_radius }}px;
       overflow: hidden;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ai-carousel-track-{{ ai_gen_id }},
+      .ai-carousel-item-{{ ai_gen_id }} {
+        transition: none !important;
+      }
     }
 
     .ai-carousel-item-{{ ai_gen_id }}:hover {
@@ -104,6 +147,10 @@
     .ai-carousel-nav-{{ ai_gen_id }}:disabled {
       opacity: 0.3;
       cursor: not-allowed;
+    }
+
+    .ai-carousel-nav-{{ ai_gen_id }}[hidden] {
+      display: none;
     }
 
     .ai-carousel-nav-{{ ai_gen_id }}.prev {
@@ -214,8 +261,8 @@
     }
 
     @media screen and (max-width: 989px) {
-      .ai-carousel-item-{{ ai_gen_id }} {
-        flex: 0 0 calc((100% - ({{ block.settings.image_gap }}px * 2)) / 3);
+      .ai-carousel-track-{{ ai_gen_id }} {
+        --carousel-columns: {{ tablet_columns }};
       }
     }
 
@@ -228,8 +275,11 @@
         padding: 0 20px;
       }
 
+      .ai-carousel-track-{{ ai_gen_id }} {
+        --carousel-columns: {{ mobile_columns }};
+      }
+
       .ai-carousel-item-{{ ai_gen_id }} {
-        flex: 0 0 calc((100% - {{ block.settings.image_gap }}px) / 2);
         height: {{ block.settings.image_height | times: 0.7 }}px;
       }
 
@@ -242,6 +292,11 @@
         overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        scroll-snap-type: x mandatory;
+        scroll-padding-left: 20px;
+        scroll-padding-right: 20px;
+        scroll-behavior: smooth;
+        touch-action: pan-y;
       }
 
       .ai-carousel-track-wrapper-{{ ai_gen_id }}::-webkit-scrollbar {
@@ -272,6 +327,28 @@
         height: 35px;
       }
     }
+
+    @media (hover: none) and (pointer: coarse) {
+      .ai-carousel-nav-{{ ai_gen_id }} {
+        display: none;
+      }
+
+      .ai-carousel-track-wrapper-{{ ai_gen_id }} {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        scroll-snap-type: x mandatory;
+        scroll-padding-left: 20px;
+        scroll-padding-right: 20px;
+        scroll-behavior: smooth;
+        touch-action: pan-y;
+      }
+
+      .ai-carousel-track-wrapper-{{ ai_gen_id }}::-webkit-scrollbar {
+        display: none;
+      }
+    }
   {% endstyle %}
 
   <image-carousel-{{ ai_gen_id }} class="ai-carousel-wrapper-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
@@ -288,9 +365,10 @@
 
       <div class="ai-carousel-track-wrapper-{{ ai_gen_id }}">
         <div class="ai-carousel-track-{{ ai_gen_id }}">
-          {% if metafield_images.size > 0 %}
+          {% assign rendered_index = 0 %}
+          {% if metafield_images != blank and metafield_images.size > 0 %}
             {% for image in metafield_images %}
-              <div class="ai-carousel-item-{{ ai_gen_id }}" data-image-index="{{ forloop.index0 }}">
+              <div class="ai-carousel-item-{{ ai_gen_id }}" data-image-index="{{ rendered_index }}">
                 <img
                   src="{{ image | image_url: width: 800 }}"
                   alt="{{ image.alt | escape }}"
@@ -299,13 +377,14 @@
                   height="{{ image.height }}"
                 >
               </div>
+              {% assign rendered_index = rendered_index | plus: 1 %}
             {% endfor %}
           {% else %}
             {% for i in (1..8) %}
               {% assign image_key = 'image_' | append: i %}
               {% assign image = block.settings[image_key] %}
               {% if image != blank %}
-                <div class="ai-carousel-item-{{ ai_gen_id }}" data-image-index="{{ forloop.index0 }}">
+                <div class="ai-carousel-item-{{ ai_gen_id }}" data-image-index="{{ rendered_index }}">
                   <img
                     src="{{ image | image_url: width: 800 }}"
                     alt="{{ image.alt | escape }}"
@@ -314,6 +393,7 @@
                     height="{{ image.height }}"
                   >
                 </div>
+                {% assign rendered_index = rendered_index | plus: 1 %}
               {% endif %}
             {% endfor %}
           {% endif %}
@@ -342,7 +422,13 @@
       </button>
 
       <div class="ai-lightbox-content-{{ ai_gen_id }}">
-        <img class="ai-lightbox-image-{{ ai_gen_id }}" src="" alt="">
+        <img
+          class="ai-lightbox-image-{{ ai_gen_id }}"
+          src=""
+          alt=""
+          width="1"
+          height="1"
+        >
       </div>
 
       <button class="ai-lightbox-nav-{{ ai_gen_id }} next" aria-label="Next image">
@@ -364,198 +450,436 @@
           super();
           this.images = [];
           this.currentIndex = 0;
-          this.currentSlide = 0;
-          this.imagesPerPage = 5;
+          this.imagesPerPage = 1;
+          this.totalPages = 1;
+          this.currentPage = 0;
+          this.firstVisibleIndex = 0;
+          this.viewport = null;
+          this.track = null;
+          this.trackWrapper = null;
+          this.prevBtn = null;
+          this.nextBtn = null;
+          this.lightbox = null;
+          this.resizeRaf = null;
+          this.keydownAttached = false;
+          this.lightboxLoadHandler = null;
+          this.handlePrevClick = this.handlePrevClick.bind(this);
+          this.handleNextClick = this.handleNextClick.bind(this);
+          this.onResize = this.onResize.bind(this);
+          this.handleKeydown = this.handleKeydown.bind(this);
         }
 
         connectedCallback() {
+          this.cacheDom();
           this.collectImages();
+
+          if (!this.images.length) {
+            return;
+          }
+
+          this.determineImagesPerPage();
           this.setupCarousel();
           this.setupLightbox();
-          this.updateCarouselButtons();
-          this.handleResize();
+          this.updateCarousel({ syncScroll: false });
+          this.registerResizeListener();
+        }
+
+        disconnectedCallback() {
+          if (this.prevBtn) {
+            this.prevBtn.removeEventListener('click', this.handlePrevClick);
+          }
+
+          if (this.nextBtn) {
+            this.nextBtn.removeEventListener('click', this.handleNextClick);
+          }
+
+          window.removeEventListener('resize', this.onResize);
+
+          if (this.keydownAttached) {
+            document.removeEventListener('keydown', this.handleKeydown);
+            this.keydownAttached = false;
+          }
+        }
+
+        cacheDom() {
+          this.track = this.querySelector('.ai-carousel-track-{{ ai_gen_id }}');
+          this.trackWrapper = this.querySelector('.ai-carousel-track-wrapper-{{ ai_gen_id }}');
+          this.prevBtn = this.querySelector('.ai-carousel-nav-{{ ai_gen_id }}.prev');
+          this.nextBtn = this.querySelector('.ai-carousel-nav-{{ ai_gen_id }}.next');
+          this.lightbox = this.querySelector('.ai-lightbox-{{ ai_gen_id }}');
         }
 
         collectImages() {
-          const items = this.querySelectorAll('.ai-carousel-item-{{ ai_gen_id }}');
-          
+          this.images = [];
+          const items = Array.from(this.querySelectorAll('.ai-carousel-item-{{ ai_gen_id }}'));
+          let visibleIndex = 0;
+
           items.forEach((item) => {
             const img = item.querySelector('img');
-            if (!img) return;
-            
+            if (!img) {
+              item.removeAttribute('data-image-index');
+              return;
+            }
+
+            item.dataset.imageIndex = visibleIndex;
+            const width = Number(img.getAttribute('width'));
+            const height = Number(img.getAttribute('height'));
+
             this.images.push({
-              src: img.src,
-              alt: img.alt
+              src: img.currentSrc || img.src,
+              alt: img.alt,
+              width: Number.isNaN(width) ? null : width,
+              height: Number.isNaN(height) ? null : height
             });
+
+            visibleIndex += 1;
+          });
+
+          this.totalPages = Math.max(1, Math.ceil(this.images.length / this.imagesPerPage));
+        }
+
+        registerResizeListener() {
+          window.addEventListener('resize', this.onResize);
+        }
+
+        onResize() {
+          if (this.resizeRaf) {
+            cancelAnimationFrame(this.resizeRaf);
+          }
+
+          this.resizeRaf = requestAnimationFrame(() => {
+            const previousViewport = this.viewport;
+            this.determineImagesPerPage();
+            const viewportChanged = previousViewport !== this.viewport;
+            this.updateCarousel({ syncScroll: viewportChanged });
           });
         }
 
-        handleResize() {
-          window.addEventListener('resize', () => {
-            if (window.innerWidth <= 749) {
-              this.imagesPerPage = 2;
-            } else if (window.innerWidth <= 989) {
-              this.imagesPerPage = 3;
-            } else {
-              this.imagesPerPage = 5;
-            }
-            this.currentSlide = 0;
-            this.updateCarousel();
-          });
+        getViewport() {
+          if (window.matchMedia('(max-width: 749px)').matches) {
+            return 'mobile';
+          }
 
-          if (window.innerWidth <= 749) {
-            this.imagesPerPage = 2;
-          } else if (window.innerWidth <= 989) {
-            this.imagesPerPage = 3;
+          if (window.matchMedia('(max-width: 989px)').matches) {
+            return 'tablet';
+          }
+
+          return 'desktop';
+        }
+
+        determineImagesPerPage() {
+          const viewport = this.getViewport();
+          let columns = {{ desktop_columns }};
+
+          if (viewport === 'mobile') {
+            columns = {{ mobile_columns }};
+          } else if (viewport === 'tablet') {
+            columns = {{ tablet_columns }};
+          }
+
+          this.imagesPerPage = Math.max(1, Math.min(columns, this.images.length || 1));
+          const maxFirstVisible = Math.max(0, this.images.length - this.imagesPerPage);
+
+          this.firstVisibleIndex = Math.min(this.firstVisibleIndex, maxFirstVisible);
+          this.currentPage = Math.floor(this.firstVisibleIndex / this.imagesPerPage);
+          this.totalPages = Math.max(1, Math.ceil(this.images.length / this.imagesPerPage));
+          this.viewport = viewport;
+
+          if (this.track) {
+            this.track.style.setProperty('--carousel-visible-columns', this.imagesPerPage);
           }
         }
 
         setupCarousel() {
-          const prevBtn = this.querySelector('.ai-carousel-nav-{{ ai_gen_id }}.prev');
-          const nextBtn = this.querySelector('.ai-carousel-nav-{{ ai_gen_id }}.next');
-
-          if (this.images.length <= this.imagesPerPage) {
-            prevBtn.style.display = 'none';
-            nextBtn.style.display = 'none';
-            return;
+          if (this.prevBtn) {
+            this.prevBtn.addEventListener('click', this.handlePrevClick);
           }
 
-          prevBtn.addEventListener('click', () => this.navigateCarousel(-1));
-          nextBtn.addEventListener('click', () => this.navigateCarousel(1));
-        }
-
-        navigateCarousel(direction) {
-          this.currentSlide += direction;
-
-          const maxSlide = this.images.length - this.imagesPerPage;
-
-          if (this.currentSlide < 0) {
-            this.currentSlide = 0;
-          } else if (this.currentSlide > maxSlide) {
-            this.currentSlide = maxSlide;
-          }
-
-          this.updateCarousel();
-        }
-
-        updateCarousel() {
-          const track = this.querySelector('.ai-carousel-track-{{ ai_gen_id }}');
-          const items = this.querySelectorAll('.ai-carousel-item-{{ ai_gen_id }}');
-          
-          if (items.length === 0) return;
-
-          if (window.innerWidth > 749) {
-            const itemWidth = items[0].offsetWidth;
-            const gap = {{ block.settings.image_gap }};
-            const offset = this.currentSlide * (itemWidth + gap);
-            
-            track.style.transform = `translateX(-${offset}px)`;
-          } else {
-            track.style.transform = 'translateX(0)';
+          if (this.nextBtn) {
+            this.nextBtn.addEventListener('click', this.handleNextClick);
           }
 
           this.updateCarouselButtons();
         }
 
-        updateCarouselButtons() {
-          const prevBtn = this.querySelector('.ai-carousel-nav-{{ ai_gen_id }}.prev');
-          const nextBtn = this.querySelector('.ai-carousel-nav-{{ ai_gen_id }}.next');
-          const maxSlide = this.images.length - this.imagesPerPage;
+        handlePrevClick() {
+          this.navigateCarousel(-1);
+        }
 
-          if (this.images.length <= this.imagesPerPage) {
-            prevBtn.style.display = 'none';
-            nextBtn.style.display = 'none';
+        handleNextClick() {
+          this.navigateCarousel(1);
+        }
+
+        navigateCarousel(direction) {
+          if (!this.images.length) {
             return;
           }
 
-          prevBtn.disabled = this.currentSlide === 0;
-          nextBtn.disabled = this.currentSlide >= maxSlide;
+          const step = this.imagesPerPage;
+          const maxFirstVisible = Math.max(0, this.images.length - this.imagesPerPage);
+
+          this.firstVisibleIndex = Math.min(
+            Math.max(this.firstVisibleIndex + direction * step, 0),
+            maxFirstVisible
+          );
+
+          this.currentPage = Math.floor(this.firstVisibleIndex / this.imagesPerPage);
+          this.updateCarousel({ syncScroll: true });
+        }
+
+        updateCarousel({ syncScroll = true } = {}) {
+          if (!this.track) {
+            return;
+          }
+
+          const items = this.querySelectorAll('.ai-carousel-item-{{ ai_gen_id }}');
+
+          if (!items.length) {
+            return;
+          }
+
+          const firstItem = items[0];
+          const itemWidth = firstItem.getBoundingClientRect().width;
+          const gap = this.getGapSize();
+
+          const targetOffset = this.firstVisibleIndex * (itemWidth + gap);
+          const maxOffset = Math.max(0, (this.images.length - this.imagesPerPage) * (itemWidth + gap));
+          const clampedOffset = Math.min(targetOffset, maxOffset);
+
+          if (this.shouldUseTouchNavigation()) {
+            this.track.style.transform = 'translateX(0)';
+
+            if (syncScroll && this.trackWrapper) {
+              this.trackWrapper.scrollTo({ left: clampedOffset, behavior: 'smooth' });
+            }
+          } else {
+            this.track.style.transform = `translateX(-${clampedOffset}px)`;
+          }
+
+          this.updateCarouselButtons();
+        }
+
+        getGapSize() {
+          if (!this.track) {
+            return {{ block.settings.image_gap }};
+          }
+
+          const styles = window.getComputedStyle(this.track);
+          const gapValue = parseFloat(styles.columnGap || styles.gap || {{ block.settings.image_gap }});
+
+          return Number.isNaN(gapValue) ? {{ block.settings.image_gap }} : gapValue;
+        }
+
+        updateCarouselButtons() {
+          if (!this.prevBtn || !this.nextBtn) {
+            return;
+          }
+
+          const hideNav = this.images.length <= this.imagesPerPage || this.shouldUseTouchNavigation();
+
+          this.prevBtn.hidden = hideNav;
+          this.nextBtn.hidden = hideNav;
+
+          if (hideNav) {
+            return;
+          }
+
+          this.prevBtn.disabled = this.currentPage === 0;
+          this.nextBtn.disabled = this.currentPage >= this.totalPages - 1;
+        }
+
+        shouldUseTouchNavigation() {
+          return window.matchMedia('(pointer: coarse)').matches || this.viewport === 'mobile';
         }
 
         setupLightbox() {
+          if (!this.lightbox) {
+            return;
+          }
+
           const items = this.querySelectorAll('.ai-carousel-item-{{ ai_gen_id }}');
-          const lightbox = this.querySelector('.ai-lightbox-{{ ai_gen_id }}');
-          
-          if (!lightbox) return;
-          
           const closeBtn = this.querySelector('.ai-lightbox-close-{{ ai_gen_id }}');
           const prevBtn = this.querySelector('.ai-lightbox-nav-{{ ai_gen_id }}.prev');
           const nextBtn = this.querySelector('.ai-lightbox-nav-{{ ai_gen_id }}.next');
 
           items.forEach((item) => {
             item.addEventListener('click', () => {
-              const index = parseInt(item.dataset.imageIndex);
+              const index = Number(item.dataset.imageIndex);
+
+              if (Number.isNaN(index)) {
+                return;
+              }
+
               this.openLightbox(index);
             });
           });
 
-          closeBtn.addEventListener('click', () => this.closeLightbox());
-          prevBtn.addEventListener('click', () => this.navigateLightbox(-1));
-          nextBtn.addEventListener('click', () => this.navigateLightbox(1));
+          if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeLightbox());
+          }
 
-          lightbox.addEventListener('click', (e) => {
-            if (e.target === lightbox) {
+          if (prevBtn) {
+            prevBtn.addEventListener('click', () => this.navigateLightbox(-1));
+          }
+
+          if (nextBtn) {
+            nextBtn.addEventListener('click', () => this.navigateLightbox(1));
+          }
+
+          this.lightbox.addEventListener('click', (event) => {
+            if (event.target === this.lightbox) {
               this.closeLightbox();
             }
           });
 
-          document.addEventListener('keydown', (e) => {
-            if (!lightbox.classList.contains('active')) return;
-            
-            if (e.key === 'Escape') {
-              this.closeLightbox();
-            } else if (e.key === 'ArrowLeft') {
-              this.navigateLightbox(-1);
-            } else if (e.key === 'ArrowRight') {
-              this.navigateLightbox(1);
-            }
-          });
+          if (!this.keydownAttached) {
+            document.addEventListener('keydown', this.handleKeydown);
+            this.keydownAttached = true;
+          }
+
+          this.lightbox.setAttribute('aria-hidden', 'true');
+        }
+
+        handleKeydown(event) {
+          if (!this.lightbox || !this.lightbox.classList.contains('active')) {
+            return;
+          }
+
+          if (event.key === 'Escape') {
+            this.closeLightbox();
+          } else if (event.key === 'ArrowLeft') {
+            this.navigateLightbox(-1);
+          } else if (event.key === 'ArrowRight') {
+            this.navigateLightbox(1);
+          }
         }
 
         openLightbox(index) {
-          if (this.images.length === 0) return;
-          
+          if (!this.images.length || !this.lightbox) {
+            return;
+          }
+
           this.currentIndex = index;
-          const lightbox = this.querySelector('.ai-lightbox-{{ ai_gen_id }}');
           const img = this.querySelector('.ai-lightbox-image-{{ ai_gen_id }}');
-          
-          img.src = this.images[index].src;
-          img.alt = this.images[index].alt;
-          
-          lightbox.classList.add('active');
+
+          if (img) {
+            const imageData = this.images[index];
+            if (this.lightboxLoadHandler) {
+              img.removeEventListener('load', this.lightboxLoadHandler);
+              this.lightboxLoadHandler = null;
+            }
+            const updateDimensions = () => {
+              const intrinsicWidth = imageData.width || img.naturalWidth || 1;
+              const intrinsicHeight = imageData.height || img.naturalHeight || 1;
+
+              img.setAttribute('width', intrinsicWidth);
+              img.setAttribute('height', intrinsicHeight);
+
+              if (!imageData.width && img.naturalWidth) {
+                imageData.width = img.naturalWidth;
+              }
+
+              if (!imageData.height && img.naturalHeight) {
+                imageData.height = img.naturalHeight;
+              }
+            };
+
+            img.src = imageData.src;
+            img.alt = imageData.alt;
+            updateDimensions();
+
+            if (!imageData.width || !imageData.height) {
+              this.lightboxLoadHandler = () => {
+                updateDimensions();
+                this.lightboxLoadHandler = null;
+              };
+              img.addEventListener('load', this.lightboxLoadHandler, { once: true });
+            }
+          }
+
+          this.lightbox.classList.add('active');
+          this.lightbox.setAttribute('aria-hidden', 'false');
           document.body.style.overflow = 'hidden';
-          
+
           this.updateLightboxCounter();
         }
 
         closeLightbox() {
-          const lightbox = this.querySelector('.ai-lightbox-{{ ai_gen_id }}');
-          lightbox.classList.remove('active');
+          if (!this.lightbox) {
+            return;
+          }
+
+          this.lightbox.classList.remove('active');
+          this.lightbox.setAttribute('aria-hidden', 'true');
           document.body.style.overflow = '';
         }
 
         navigateLightbox(direction) {
+          if (!this.images.length) {
+            return;
+          }
+
           this.currentIndex += direction;
-          
+
           if (this.currentIndex < 0) {
             this.currentIndex = this.images.length - 1;
           } else if (this.currentIndex >= this.images.length) {
             this.currentIndex = 0;
           }
-          
+
           const img = this.querySelector('.ai-lightbox-image-{{ ai_gen_id }}');
-          img.src = this.images[this.currentIndex].src;
-          img.alt = this.images[this.currentIndex].alt;
-          
+
+          if (img) {
+            const imageData = this.images[this.currentIndex];
+
+            if (this.lightboxLoadHandler) {
+              img.removeEventListener('load', this.lightboxLoadHandler);
+              this.lightboxLoadHandler = null;
+            }
+
+            const updateDimensions = () => {
+              const intrinsicWidth = imageData.width || img.naturalWidth || 1;
+              const intrinsicHeight = imageData.height || img.naturalHeight || 1;
+
+              img.setAttribute('width', intrinsicWidth);
+              img.setAttribute('height', intrinsicHeight);
+
+              if (!imageData.width && img.naturalWidth) {
+                imageData.width = img.naturalWidth;
+              }
+
+              if (!imageData.height && img.naturalHeight) {
+                imageData.height = img.naturalHeight;
+              }
+            };
+
+            img.src = imageData.src;
+            img.alt = imageData.alt;
+            updateDimensions();
+
+            if (!imageData.width || !imageData.height) {
+              this.lightboxLoadHandler = () => {
+                updateDimensions();
+                this.lightboxLoadHandler = null;
+              };
+              img.addEventListener('load', this.lightboxLoadHandler, { once: true });
+            }
+          }
+
           this.updateLightboxCounter();
         }
 
         updateLightboxCounter() {
           const current = this.querySelector('.ai-lightbox-counter-{{ ai_gen_id }} .current');
           const total = this.querySelector('.ai-lightbox-counter-{{ ai_gen_id }} .total');
-          
-          current.textContent = this.currentIndex + 1;
-          total.textContent = this.images.length;
+
+          if (current) {
+            current.textContent = this.currentIndex + 1;
+          }
+
+          if (total) {
+            total.textContent = this.images.length;
+          }
         }
       }
 
